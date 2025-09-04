@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Web Bluetooth 3x3 Button Grid</title>
+  <style>
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 80px);
+      grid-gap: 10px;
+      margin: 20px;
+    }
+    button {
+      width: 80px;
+      height: 80px;
+      font-size: 24px;
+    }
+    #connect {
+      font-size: 16px;
+      padding: 10px 20px;
+      white-space: nowrap;
+      width: auto;
+      height: auto;
+      display: inline-block;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<h2>micro:bit Web Bluetooth Controller</h2>
+<button id="connect">micro:bitへ接続</button>
+<div class="grid" id="buttonGrid"></div>
+
+<script>
+// UUID定義（Web → micro:bit 送信）
+const UART_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const UART_RX_CHAR_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+let txChar = null;
+let Web = 0;
+
+// micro:bitへ接続
+async function connectMicrobit() {
+  try {
+    console.log("🔍 micro:bitを検索中...");
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: 'BBC micro:bit' }],
+      optionalServices: [UART_SERVICE_UUID]
+    });
+
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(UART_SERVICE_UUID);
+    txChar = await service.getCharacteristic(UART_RX_CHAR_UUID); // ← 正しい送信先UUID
+
+    console.log("✅ micro:bitに接続されました（送信特性取得）");
+  } catch (error) {
+    console.error("❌ 接続失敗:", error);
+    alert("micro:bitとの接続に失敗しました。電源とBluetoothが有効か確認してください。");
+  }
+}
+
+// micro:bitへ送信
+async function sendToMicrobit(value) {
+  if (!txChar) {
+    console.warn("⚠️ micro:bit未接続です");
+    return;
+  }
+  try {
+    const data = new TextEncoder().encode(value + "\n");
+    await txChar.writeValue(data);
+    console.log("📤 送信:", value);
+  } catch (error) {
+    console.error("送信失敗:", error);
+  }
+}
+
+// UI生成
+const grid = document.getElementById('buttonGrid');
+for (let i = 1; i <= 9; i++) {
+  const btn = document.createElement('button');
+  btn.textContent = i;
+
+  btn.addEventListener('mousedown', () => {
+    document.querySelectorAll('.grid button').forEach(b => {
+      if (b !== btn) b.disabled = true;
+    });
+    Web = i;
+    sendToMicrobit(Web);
+  });
+
+  btn.addEventListener('mouseup', () => {
+    Web = 0;
+    sendToMicrobit(Web);
+    document.querySelectorAll('.grid button').forEach(b => b.disabled = false);
+  });
+
+  grid.appendChild(btn);
+}
+
+document.getElementById('connect').addEventListener('click', connectMicrobit);
+</script>
+
+</body>
+</html>
