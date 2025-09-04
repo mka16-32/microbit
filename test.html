@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>micro:bit Web Bluetooth 接続</title>
+</head>
+<body>
+  <h1>micro:bit 接続テスト</h1>
+  <button onclick="connectMicrobit()">接続</button>
+  <input type="text" id="sendText" placeholder="送信するテキスト">
+  <button onclick="sendData()">送信</button>
+  <pre id="log"></pre>
+
+  <script>
+    const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+    const TX_CHAR = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // micro:bitへ送信
+    const RX_CHAR = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // micro:bitから受信
+
+    let txCharacteristic, rxCharacteristic;
+
+    async function connectMicrobit() {
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: [UART_SERVICE] }]
+        });
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(UART_SERVICE);
+        txCharacteristic = await service.getCharacteristic(TX_CHAR);
+        rxCharacteristic = await service.getCharacteristic(RX_CHAR);
+
+        await rxCharacteristic.startNotifications();
+        rxCharacteristic.addEventListener('characteristicvaluechanged', event => {
+          const value = new TextDecoder().decode(event.target.value);
+          document.getElementById('log').textContent += `受信: ${value}\n`;
+        });
+
+        document.getElementById('log').textContent += '✅ 接続完了\n';
+      } catch (error) {
+        console.error(error);
+        document.getElementById('log').textContent += `❌ エラー: ${error}\n`;
+      }
+    }
+
+    async function sendData() {
+      const text = document.getElementById('sendText').value + '\n';
+      const data = new TextEncoder().encode(text);
+      await txCharacteristic.writeValue(data);
+      document.getElementById('log').textContent += `送信: ${text}`;
+    }
+  </script>
+</body>
+</html>
